@@ -33,6 +33,10 @@ interface Database {
         id: number,
         tagId: number,
         mediaId: number
+    },
+    Collection: {
+        id: number,
+        name: string
     }
 }
 
