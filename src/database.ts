@@ -37,6 +37,11 @@ interface Database {
     Collection: {
         id: number,
         name: string
+    },
+    CollectionMediaMapping: {
+        id: number,
+        collectionId: number,
+        mediaId: number
     }
 }
 
