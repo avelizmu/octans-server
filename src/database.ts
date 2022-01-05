@@ -17,6 +17,17 @@ interface Database {
         id: number,
         username: string,
         password: string
+    },
+    Media: {
+        id: number,
+        hash: string,
+        mediaType: string,
+        width: number,
+        height: number,
+        duration: number,
+        size: number,
+        created: Date,
+        createdBy: number
     }
 }
 
