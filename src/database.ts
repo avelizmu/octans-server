@@ -28,6 +28,11 @@ interface Database {
         size: number,
         created: Date,
         createdBy: number
+    },
+    TagMediaMapping: {
+        id: number,
+        tagId: number,
+        mediaId: number
     }
 }
 
