@@ -2,16 +2,15 @@ import { Kysely } from 'kysely'
 
 export async function up(db: Kysely<any>): Promise<void> {
     return db.schema
-        .createTable('Tag')
+        .createTable('User')
         .addColumn('id', 'integer', col => col.primaryKey().autoIncrement())
-        .addColumn('type', 'varchar(64)')
-        .addColumn('namespace', 'varchar(32)')
-        .addColumn('tagName', 'varchar(256)')
+        .addColumn('username', 'varchar(64)')
+        .addColumn('password', 'varchar(60)')
         .execute()
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
     return db.schema
-        .dropTable('Tag')
+        .dropTable('User')
         .execute();
 }

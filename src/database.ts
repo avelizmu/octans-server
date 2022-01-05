@@ -7,6 +7,17 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 interface Database {
+    Tag: {
+        id: number,
+        type: string,
+        namespace: string,
+        tagName: string
+    },
+    User: {
+        id: number,
+        username: string,
+        password: string
+    }
 }
 
 const database = new Kysely<Database>({
