@@ -42,6 +42,11 @@ interface Database {
         id: number,
         collectionId: number,
         mediaId: number
+    },
+    CollectionShare: {
+        id: number,
+        collectionId: number,
+        userId: number
     }
 }
 
