@@ -1,4 +1,4 @@
-import {Kysely, Migration, MysqlDialect, Generated, Migrator, FileMigrationProvider} from 'kysely'
+import {Kysely, Migration, Migrator, MysqlDialect, Generated} from 'kysely'
 import {databaseConfig} from "../config/index.js";
 import path, {dirname} from "path";
 import {readdirSync} from "fs";
