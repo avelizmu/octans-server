@@ -46,14 +46,24 @@ export const createUser = async function(req: Request, res: Response) {
             })
             .execute();
 
-        return res.status(201).send(
-            await database
-                .selectFrom('User')
-                .select(['id', 'username'])
-                .where('username', '=', username)
-                .limit(1)
-                .executeTakeFirst()
-        )
+        const newUser = await database
+            .selectFrom('User')
+            .select(['id', 'username'])
+            .where('username', '=', username)
+            .limit(1)
+            .executeTakeFirst()
+
+        const collectionResult = await database
+            .insertInto('Collection')
+            .values({
+                name: 'Default Collection',
+                type: 'DEFAULT',
+                ownerId: newUser!.id
+            })
+            .execute();
+
+        req.session.user = newUser!.id;
+        return res.status(201).send(newUser);
     }
     catch(err: any) {
         if(err.isJoi) {
