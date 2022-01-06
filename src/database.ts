@@ -37,7 +37,8 @@ interface Database {
     Collection: {
         id: Generated<number>,
         name: string,
-        type: string
+        type: string,
+        ownerId: number
     },
     CollectionMediaMapping: {
         id: Generated<number>,
