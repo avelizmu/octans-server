@@ -38,29 +38,37 @@ export const createUser = async function(req: Request, res: Response) {
 
         const passwordHash = await bcrypt.hash(password, 12);
 
-        const result = await database
-            .insertInto('User')
-            .values({
-                username: username,
-                password: passwordHash
-            })
-            .execute();
+        const newUser = await database.transaction()
+            .execute((async database => {
+                // Create the new user
+                await database
+                    .insertInto('User')
+                    .values({
+                        username: username,
+                        password: passwordHash
+                    })
+                    .execute();
 
-        const newUser = await database
-            .selectFrom('User')
-            .select(['id', 'username'])
-            .where('username', '=', username)
-            .limit(1)
-            .executeTakeFirst()
+                // Get the created user
+                const newUser = await database
+                    .selectFrom('User')
+                    .select(['id', 'username'])
+                    .where('username', '=', username)
+                    .limit(1)
+                    .executeTakeFirst()
 
-        const collectionResult = await database
-            .insertInto('Collection')
-            .values({
-                name: 'Default Collection',
-                type: 'DEFAULT',
-                ownerId: newUser!.id
-            })
-            .execute();
+                // Create the default collection
+                await database
+                    .insertInto('Collection')
+                    .values({
+                        name: 'Default Collection',
+                        type: 'DEFAULT',
+                        ownerId: newUser!.id
+                    })
+                    .execute();
+
+                return newUser;
+            }))
 
         req.session.user = newUser!.id;
         return res.status(201).send(newUser);
