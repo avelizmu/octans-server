@@ -13,6 +13,11 @@ type SessionConfig = {
     sessionSecrets: string[]
 }
 
+type FileStorageConfig = {
+    fileDirectory: string
+}
+
 export const databaseConfig: MysqlDialectConfig = yaml.parse(fs.readFileSync(path.resolve('config', 'database.yaml'), 'utf-8'));
 export const redisConfig: RedisConfig = yaml.parse(fs.readFileSync(path.resolve('config', 'redis.yaml'), 'utf-8'));
 export const sessionConfig: SessionConfig = yaml.parse(fs.readFileSync(path.resolve('config', 'session.yaml'), 'utf-8'));
+export const fileStorageConfig: FileStorageConfig = yaml.parse(fs.readFileSync(path.resolve('config', 'fileStorage.yaml'), 'utf-8'));

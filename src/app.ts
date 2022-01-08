@@ -36,7 +36,9 @@ app.use(express.urlencoded({extended: true}));
 app.use(cookieParser());
 
 import usersRouter from "./routes/users.js"
+import mediaRouter from "./routes/media.js"
 
 app.use('/users', usersRouter);
+app.use('/media', mediaRouter);
 
 export default app;
