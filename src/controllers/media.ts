@@ -155,3 +155,94 @@ export const upload = async function(req: Request, res: Response) {
             .toFile(`${fileStorageConfig.fileDirectory}/storage/${hashCode}.thumbnail.png`)
     }
 }
+
+export const list = async function(req: Request, res: Response) {
+    const schema = Joi.object({
+        type: Joi.string()
+            .equal('Self', 'Shared', 'All')
+            .required(),
+        tags: Joi.array()
+            .has(Joi.number().integer().positive())
+            .optional(),
+        offset: Joi.number()
+            .min(0)
+            .optional()
+    });
+
+    try {
+        let {type, tags, offset}: {type: string, tags?: number[], offset?: number} = await schema.validateAsync(req.query);
+        if(!offset) {
+            offset = 0;
+        }
+
+        if(type === 'Self') {
+            let query = database
+                .selectFrom('Media')
+                .select(['Media.id', 'Media.mediaType', 'Media.created', 'Media.createdBy', 'Media.hash', 'Media.duration', 'Media.height', 'Media.width', 'Media.duration'])
+                .where('createdBy', '=', req.session.user!)
+                .limit(100)
+                .offset(offset);
+            if(tags) {
+                query = query
+                    .innerJoin('TagMediaMapping', 'TagMediaMapping.mediaId', 'Media.id')
+                    .groupBy('Media.id')
+                    .where('TagMediaMapping.tagId', 'in', tags)
+                    .having(database.raw('count(*)'), '>=', tags.length);
+            }
+            const media = await query.execute();
+            return res.status(200).send(media);
+        }
+        else if(type === 'Shared') {
+            let query = database
+                .selectFrom('Media')
+                .innerJoin('CollectionMediaMapping', 'CollectionMediaMapping.mediaId', 'Media.id')
+                .innerJoin('Collection', 'Collection.id', 'CollectionMediaMapping.collectionId')
+                .innerJoin('CollectionShare', 'CollectionShare.collectionId', 'Collection.id')
+                .select(['Media.id', 'Media.mediaType', 'Media.created', 'Media.createdBy', 'Media.hash', 'Media.duration', 'Media.height', 'Media.width', 'Media.duration'])
+                .where('CollectionShare.userId', '=', req.session.user!)
+                .limit(100)
+                .offset(offset);
+            if(tags) {
+                query = query
+                    .innerJoin('TagMediaMapping', 'TagMediaMapping.mediaId', 'Media.id')
+                    .groupBy('Media.id')
+                    .where('TagMediaMapping.tagId', 'in', tags)
+                    .having(database.raw('count(*)'), '>=', tags.length);
+            }
+            const media = await query.execute();
+            return res.status(200).send(media);
+        }
+        else {
+            let query = await database
+                .selectFrom('Media')
+                .innerJoin('CollectionMediaMapping', 'CollectionMediaMapping.mediaId', 'Media.id')
+                .innerJoin('Collection', 'Collection.id', 'CollectionMediaMapping.collectionId')
+                .innerJoin('CollectionShare', 'CollectionShare.collectionId', 'Collection.id')
+                .select(['Media.id', 'Media.mediaType', 'Media.created', 'Media.createdBy', 'Media.hash', 'Media.duration', 'Media.height', 'Media.width', 'Media.duration'])
+                .where(qb =>
+                    qb
+                        .where('CollectionShare.userId', '=', req.session.user!)
+                        .orWhere('Media.createdBy', '=', req.session.user!)
+                )
+                .limit(100)
+                .offset(offset);
+            if(tags) {
+                query = query
+                    .innerJoin('TagMediaMapping', 'TagMediaMapping.mediaId', 'Media.id')
+                    .groupBy('Media.id')
+                    .where('TagMediaMapping.tagId', 'in', tags)
+                    .having(database.raw('count(*)'), '>=', tags.length);
+            }
+            const media = await query.execute();
+
+            return res.status(200).send(media);
+        }
+    }
+    catch(err: any) {
+        if(err.isJoi) {
+            return res.status(400).send({message: (err as ValidationError).message})
+        }
+        console.error(err);
+        return res.status(500).send({message: 'An error has occurred on the server.'});
+    }
+}
