@@ -27,6 +27,7 @@ export const upload = async function(req: Request, res: Response) {
     let width = 0;
     let height = 0;
     let duration = 0;
+    let metadata: FfprobeData;
     try {
         if(req.file.mimetype.startsWith('image/')) {
             const dimensions = imageSize(req.file.path);
@@ -34,7 +35,7 @@ export const upload = async function(req: Request, res: Response) {
             height = dimensions.height || 0;
         }
         else if(req.file.mimetype.startsWith('video/')) {
-            const metadata = (await promisify(ffmpeg.ffprobe)(req.file.path)) as FfprobeData;
+            metadata = (await promisify(ffmpeg.ffprobe)(req.file.path)) as FfprobeData;
             metadata.streams.forEach(stream => {
                 if(stream.width && stream.width > width) {
                     width = stream.width;
@@ -148,6 +149,18 @@ export const upload = async function(req: Request, res: Response) {
                 timestamps: ['50%'],
                 size: `${thumbnailDimensions[0]}x${thumbnailDimensions[1]}`
             });
+
+        await fs.promises.mkdir(`${fileStorageConfig.fileDirectory}/storage/${hashCode}_subtitles`)
+        let index = 1;
+        metadata!.streams.forEach(stream => {
+            if(stream.codec_type === 'subtitle') {
+                ffmpeg(`${fileStorageConfig.fileDirectory}/storage/${hashCode}`)
+                    .inputOptions('-txt_format text')
+                    .output(`${fileStorageConfig.fileDirectory}/storage/${hashCode}_subtitles/${index++}.vtt`)
+                    .run();
+            }
+        })
+
     }
     else {
         await sharp(`${fileStorageConfig.fileDirectory}/storage/${hashCode}`)
@@ -237,6 +250,88 @@ export const list = async function(req: Request, res: Response) {
 
             return res.status(200).send(media);
         }
+    }
+    catch(err: any) {
+        if(err.isJoi) {
+            return res.status(400).send({message: (err as ValidationError).message})
+        }
+        console.error(err);
+        return res.status(500).send({message: 'An error has occurred on the server.'});
+    }
+}
+
+export const listSubtitles = async function(req: Request, res: Response) {
+    const schema = Joi.object({
+        hash: Joi.string()
+            .hex()
+            .min(5)
+            .max(40)
+            .required()
+    });
+
+    try {
+        const {hash} = await schema.validateAsync(req.params);
+
+        const media = await database
+            .selectFrom('Media')
+            .selectAll()
+            .where('hash', '=', hash)
+            .executeTakeFirst();
+        if(!media) {
+            return res.status(404).send({message: 'No media found with that hash'});
+        }
+
+        const dir = `${fileStorageConfig.fileDirectory}/storage/${hash}_subtitles`;
+        const subtitles = await fs.promises.readdir(dir);
+        return res.status(200).send({tracks: subtitles.length});
+    }
+    catch(err: any) {
+        if(err.isJoi) {
+            return res.status(400).send({message: (err as ValidationError).message})
+        }
+        console.error(err);
+        return res.status(500).send({message: 'An error has occurred on the server.'});
+    }
+}
+
+export const downloadSubtitle = async function(req: Request, res: Response) {
+    const schema = Joi.object({
+        hash: Joi.string()
+            .hex()
+            .min(5)
+            .max(40)
+            .required(),
+        index: Joi.number()
+            .integer()
+            .positive()
+            .required()
+    });
+
+    try {
+        const {hash, index} = await schema.validateAsync(req.params);
+        const path = `${fileStorageConfig.fileDirectory}/storage/${hash}_subtitles/${index}.srt`;
+        try {
+            const stat = await fs.promises.stat(path);
+            return res.status(200).sendFile(path);
+        }
+        catch(err) {
+
+        }
+
+        if(true){
+            return res.status(200).sendFile(`${fileStorageConfig.fileDirectory}/storage/${hash}_subtitles/${index}.vtt`);
+        }
+
+        const media = await database
+            .selectFrom('Media')
+            .selectAll()
+            .where('hash', '=', hash)
+            .executeTakeFirst();
+        if(!media) {
+            return res.status(404).send({message: 'No media found with that hash'});
+        }
+
+
     }
     catch(err: any) {
         if(err.isJoi) {
