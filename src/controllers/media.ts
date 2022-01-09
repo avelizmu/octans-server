@@ -260,6 +260,81 @@ export const list = async function(req: Request, res: Response) {
     }
 }
 
+export const download = async function(req: Request, res: Response) {
+    const schema = Joi.object({
+        hash: Joi.string()
+            .hex()
+            .min(5)
+            .max(40)
+            .required(),
+        thumbnail: Joi.boolean()
+            .optional()
+    });
+
+    try {
+        const {hash, thumbnail} = await schema.validateAsync(req.params);
+        const path = `${fileStorageConfig.fileDirectory}/storage/${hash}${thumbnail ? '.thumbnail.png' : ''}`;
+        const stat = await fs.promises.stat(path);
+
+        if(thumbnail) {
+            return res.status(200).sendFile(path);
+        }
+
+        const media = await database
+            .selectFrom('Media')
+            .selectAll()
+            .where('hash', '=', hash)
+            .executeTakeFirst();
+        if(!media) {
+            return res.status(404).send({message: 'No media found with that hash'});
+        }
+
+        if(media.mediaType.startsWith('video')) {
+            const rangeHeader = req.headers.range;
+            if(!rangeHeader) {
+                return res.status(200).sendFile(path);
+            }
+
+            let range: number[];
+            if(!rangeHeader.startsWith('bytes=')) {
+                range = [0, 65536];
+            }
+            else {
+                range = rangeHeader.substring(6).split('-').map(x => parseInt(x));
+            }
+
+            const start = range[0];
+            const total = stat.size;
+            let end = range[1] ? range[1] : total - 1;
+            let chunksize = (end - start) + 1;
+
+            const maxChunk = 1024 * 1024;
+            if(chunksize > maxChunk) {
+                end = start + maxChunk - 1;
+                chunksize = (end - start) + 1;
+            }
+
+            res.writeHead(206, {
+                "Content-Range": "bytes " + start + "-" + end + "/" + total,
+                "Accept-Ranges": "bytes",
+                "Content-Length": chunksize,
+                "Content-Type": "video/mp4"
+            })
+            return fs.createReadStream(path, {
+                start: start,
+                end: end
+            }).pipe(res);
+        }
+    }
+    catch(err: any) {
+        if(err.isJoi) {
+            return res.status(400).send({message: (err as ValidationError).message})
+        }
+        console.error(err);
+        return res.status(500).send({message: 'An error has occurred on the server.'});
+    }
+}
+
 export const listSubtitles = async function(req: Request, res: Response) {
     const schema = Joi.object({
         hash: Joi.string()
