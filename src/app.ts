@@ -37,8 +37,10 @@ app.use(cookieParser());
 
 import usersRouter from "./routes/users.js"
 import mediaRouter from "./routes/media.js"
+import tagsRouter from "./routes/tags.js"
 
 app.use('/users', usersRouter);
 app.use('/media', mediaRouter);
+app.use('/tags', tagsRouter);
 
 export default app;
