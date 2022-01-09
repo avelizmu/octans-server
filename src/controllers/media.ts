@@ -82,25 +82,46 @@ export const upload = async function(req: Request, res: Response) {
 
     // Add the entry to the database and return it
     try {
-        await database
-            .insertInto('Media')
-            .values({
-                hash: hashCode,
-                mediaType: req.file.mimetype,
-                width,
-                height,
-                duration,
-                size: req.file.size,
-                created: new Date(),
-                createdBy: req.session.user!
-            })
-            .execute();
-
         const media = await database
-            .selectFrom('Media')
-            .selectAll()
-            .where('hash', '=', hashCode)
-            .executeTakeFirst();
+            .transaction()
+            .execute((async database => {
+                await database
+                    .insertInto('Media')
+                    .values({
+                        hash: hashCode,
+                        mediaType: req.file!.mimetype,
+                        width,
+                        height,
+                        duration,
+                        size: req.file!.size,
+                        created: new Date(),
+                        createdBy: req.session.user!
+                    })
+                    .execute();
+
+                const media = await database
+                    .selectFrom('Media')
+                    .selectAll()
+                    .where('hash', '=', hashCode)
+                    .executeTakeFirst();
+
+                const defaultCollection = await database
+                    .selectFrom('Collection')
+                    .selectAll()
+                    .where('type', '=', 'DEFAULT')
+                    .where('ownerId', '=', req.session.user!)
+                    .executeTakeFirst();
+
+                await database
+                    .insertInto('CollectionMediaMapping')
+                    .values({
+                        collectionId: defaultCollection!.id,
+                        mediaId: media!.id
+                    })
+                    .execute();
+
+                return media;
+            }))
 
         res.status(200).send(media);
     }
