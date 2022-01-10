@@ -169,13 +169,32 @@ export const upload = async function(req: Request, res: Response) {
     }
 }
 
+const systemNamespaces = ['width', 'height', 'duration', 'size']
+type systemNamespacesType = 'width' | 'height' | 'duration' | 'size'
+type operatorType = '=' | '>' | '>=' | '<' | '<='
+
 export const list = async function(req: Request, res: Response) {
     const schema = Joi.object({
         type: Joi.string()
             .equal('Self', 'Shared', 'All')
             .required(),
         tags: Joi.array()
-            .has(Joi.number().integer().positive())
+            .items(
+                Joi.number().integer().positive(),
+                Joi.array()
+                    .ordered(
+                        Joi.string()
+                            .allow('width', 'height', 'duration', 'size')
+                            .required(),
+                        Joi.string()
+                            .allow('=', '>', '>=', '<', '<=')
+                            .required(),
+                        Joi.number()
+                            .min(0)
+                            .integer()
+                            .required()
+                    )
+            )
             .optional(),
         offset: Joi.number()
             .min(0)
@@ -183,10 +202,15 @@ export const list = async function(req: Request, res: Response) {
     });
 
     try {
-        let {type, tags, offset}: {type: string, tags?: number[], offset?: number} = await schema.validateAsync(req.query);
+        let {type, tags, offset}: {type: string, tags?: (number|[string, string, number])[], offset?: number} = await schema.validateAsync(req.body);
         if(!offset) {
             offset = 0;
         }
+
+        const tagIds: number[] = tags?.filter(t => typeof(t) === 'number') as number[];
+        let systemTags: [systemNamespacesType, operatorType, number][] = (tags?.filter(t => typeof(t) === 'object') as [string, string, number][])
+            .filter(([namespace]) => systemNamespaces.includes(namespace)) as [systemNamespacesType, operatorType, number][];
+
 
         if(type === 'Self') {
             let query = database
@@ -195,12 +219,18 @@ export const list = async function(req: Request, res: Response) {
                 .where('createdBy', '=', req.session.user!)
                 .limit(100)
                 .offset(offset);
-            if(tags) {
+            if(tagIds.length) {
                 query = query
                     .innerJoin('TagMediaMapping', 'TagMediaMapping.mediaId', 'Media.id')
                     .groupBy('Media.id')
-                    .where('TagMediaMapping.tagId', 'in', tags)
-                    .having(database.raw('count(*)'), '>=', tags.length);
+                    .where('TagMediaMapping.tagId', 'in', tagIds)
+                    .having(database.raw('count(*)'), '>=', tagIds.length);
+            }
+            if(systemTags.length) {
+                systemTags.forEach(([namespace, operator, value]) => {
+                    query = query
+                        .where(`Media.${namespace}`, operator, value)
+                })
             }
             const media = await query.execute();
             return res.status(200).send(media);
@@ -215,18 +245,24 @@ export const list = async function(req: Request, res: Response) {
                 .where('CollectionShare.userId', '=', req.session.user!)
                 .limit(100)
                 .offset(offset);
-            if(tags) {
+            if(tagIds.length) {
                 query = query
                     .innerJoin('TagMediaMapping', 'TagMediaMapping.mediaId', 'Media.id')
                     .groupBy('Media.id')
-                    .where('TagMediaMapping.tagId', 'in', tags)
-                    .having(database.raw('count(*)'), '>=', tags.length);
+                    .where('TagMediaMapping.tagId', 'in', tagIds)
+                    .having(database.raw('count(*)'), '>=', tagIds.length);
+            }
+            if(systemTags.length) {
+                systemTags.forEach(([namespace, operator, value]) => {
+                    query = query
+                        .where(`Media.${namespace}`, operator, value)
+                })
             }
             const media = await query.execute();
             return res.status(200).send(media);
         }
         else {
-            let query = await database
+            let query = database
                 .selectFrom('Media')
                 .innerJoin('CollectionMediaMapping', 'CollectionMediaMapping.mediaId', 'Media.id')
                 .innerJoin('Collection', 'Collection.id', 'CollectionMediaMapping.collectionId')
@@ -239,12 +275,18 @@ export const list = async function(req: Request, res: Response) {
                 )
                 .limit(100)
                 .offset(offset);
-            if(tags) {
+            if(tagIds.length) {
                 query = query
                     .innerJoin('TagMediaMapping', 'TagMediaMapping.mediaId', 'Media.id')
                     .groupBy('Media.id')
-                    .where('TagMediaMapping.tagId', 'in', tags)
-                    .having(database.raw('count(*)'), '>=', tags.length);
+                    .where('TagMediaMapping.tagId', 'in', tagIds)
+                    .having(database.raw('count(*)'), '>=', tagIds.length);
+            }
+            if(systemTags.length) {
+                systemTags.forEach(([namespace, operator, value]) => {
+                    query = query
+                        .where(`Media.${namespace}`, operator, value)
+                })
             }
             const media = await query.execute();
 
@@ -324,6 +366,9 @@ export const download = async function(req: Request, res: Response) {
                 start: start,
                 end: end
             }).pipe(res);
+        }
+        else if(media.mediaType.startsWith('image')) {
+            return res.status(200).sendFile(path);
         }
     }
     catch(err: any) {
@@ -407,6 +452,38 @@ export const downloadSubtitle = async function(req: Request, res: Response) {
         }
 
 
+    }
+    catch(err: any) {
+        if(err.isJoi) {
+            return res.status(400).send({message: (err as ValidationError).message})
+        }
+        console.error(err);
+        return res.status(500).send({message: 'An error has occurred on the server.'});
+    }
+}
+
+export const getMedia = async function(req: Request, res: Response) {
+    const schema = Joi.object({
+        hash: Joi.string()
+            .hex()
+            .min(5)
+            .max(40)
+            .required()
+    });
+
+    try {
+        const {hash} = await schema.validateAsync(req.params);
+
+        const media = await database
+            .selectFrom('Media')
+            .selectAll()
+            .where('hash', '=', hash)
+            .executeTakeFirst();
+        if(!media) {
+            return res.status(404).send({message: 'No media found with that hash'});
+        }
+
+        return res.status(200).send(media);
     }
     catch(err: any) {
         if(err.isJoi) {
