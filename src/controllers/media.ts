@@ -9,6 +9,7 @@ import {promisify} from "util";
 import crypto from "crypto";
 import {fileStorageConfig} from "../../config/index.js";
 import sharp from "sharp";
+import {systemNamespaces} from "./tags.js"
 
 export const upload = async function(req: Request, res: Response) {
     if(!req.file) {
@@ -169,7 +170,6 @@ export const upload = async function(req: Request, res: Response) {
     }
 }
 
-const systemNamespaces = ['width', 'height', 'duration', 'size']
 type systemNamespacesType = 'width' | 'height' | 'duration' | 'size'
 type operatorType = '=' | '>' | '>=' | '<' | '<='
 

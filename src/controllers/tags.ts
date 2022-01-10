@@ -2,6 +2,8 @@ import {Request, Response} from "express";
 import Joi, {ValidationError} from "joi";
 import database from "../database.js";
 
+export const systemNamespaces = ['width', 'height', 'duration', 'size']
+
 export const create = async function(req: Request, res: Response) {
     const schema = Joi.object({
         namespace: Joi.string()
@@ -16,6 +18,14 @@ export const create = async function(req: Request, res: Response) {
 
     try {
         const {namespace, tagName}: {namespace: string, tagName: string} = await schema.validateAsync(req.body);
+        if(systemNamespaces.includes(namespace)) {
+            return res.status(200).send({
+                id: -1,
+                type: 'VIRTUAL',
+                namespace,
+                tagName
+            })
+        }
 
         const existingTag = await database
             .selectFrom('Tag')
